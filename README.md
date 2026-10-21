@@ -42,8 +42,10 @@ creates a missing mirror **private**; there is deliberately no input that does
 otherwise. Making a mirror public is the owner's own explicit, per-repo
 decision. Build everything up to the flip; the flip is human.
 
-- Every run rebuilds the mirror and **force-pushes** it: the mirror is output
-  — work in the source, not the mirror.
+- Syncs are **incremental and fast-forward**: prior mirror commits — and every
+  link anyone made to them — stay reachable, forever. Only a **declared epoch**
+  (`history_epoch: "new"`) rewrites and force-pushes, and the notice says so.
+  The mirror is still output: work in the source, not the mirror.
 - The Action copies tracked files outside `strip_paths` — **reviewing what
   crosses is the operator's job**, and once a mirror is public, each sync
   publishes its selected contents immediately. Defaults cannot know your
@@ -88,17 +90,22 @@ digests: 45 staged (dry run — prompts recorded, no API call)
 # .github/workflows/no-adrs-mirror.yml — on the PRIVATE source repo
 on:
   push: { branches: [main] }
+concurrency:            # racing pushes queue up; the newest wins — never two
+  group: no-adrs-mirror #   concurrent rebuilds force-pushing over each other
+  cancel-in-progress: true
 jobs:
   mirror:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }     # filter mode needs full history
       - uses: ADRs4AI/no-adrs-mirror@v1
         with:
           token: ${{ secrets.MIRROR_TOKEN }}
           create_if_missing: "true"  # creates PRIVATE, always
           dry_run: "true"            # first run: preview only — nothing pushes
+          # history_mode: filter requires, at the workflow top level:
+          #   permissions: { contents: write }   (state branch persists to THIS repo)
           # approved_paths: |        # required once the mirror is PUBLIC (fail-closed)
           #   src
           #   README.md
@@ -119,6 +126,12 @@ jobs:
 
 The Action is a wrapper around `mirror.py`, a single typed Python file —
 stdlib only; `anthropic` and `git-filter-repo` are installed only when used.
+
+**New to this? The [manual](docs/manual/README.md)** walks the whole path in
+three sittings: [getting started](docs/manual/01-getting-started.md) (preview
+first, always), [going public](docs/manual/02-going-public.md), and
+[troubleshooting](docs/manual/03-troubleshooting.md) — every error our own
+first runs hit, with its fix.
 
 ## The notice (what a mirror reader sees)
 
@@ -146,7 +159,7 @@ maintainers; its license is decided separately from this code's.
 `adr://v1/repo/ADRs4AI/vscode-adrs4ai/adr/<number>#<anchor>`; a resolving
 Address is the citation.
 
-History mode: `snapshot`. Generated <UTC timestamp> by no-adrs-mirror 0.2.0.
+History mode: `snapshot`. Generated <UTC timestamp> by [no-adrs-mirror](https://github.com/marketplace/actions/no-adrs-mirror) 0.3.0.
 ```
 
 ## The four postures (no `mode` input — each is a configuration)
@@ -167,12 +180,20 @@ reasoning and disclosing that you keep it are both features.
 Stripping the record from the *tree* does not strip it from *history*: commit
 messages narrate the reasoning.
 
-- **`snapshot`** (default): the kept files at source HEAD as **one commit**.
-  No history, no messages, nothing to leak.
+- **`snapshot`** (default): the kept files at source HEAD as **one commit**
+  per sync — the first sync starts the mirror, each later one appends. No
+  source history, no messages, nothing to leak.
 - **`filter`** (via `git filter-repo`): code history kept; commits that only
   touched the record vanish *with* their messages. What survives is the
   **mixed commits** — code + record in one commit, the residual leak surface —
   which is why filter mode pairs with a message tier (below).
+
+Both modes are **incremental by default**. Filter mode keeps a state branch
+(`no-adrs-mirror/state`, in your **private** source) so each sync processes
+only new commits: rewritten SHAs stay byte-stable across syncs, pushes are
+plain fast-forwards, and links into the mirror never die. A full rebuild
+happens only when you declare it (`history_epoch: "new"`) — and the notice
+discloses which kind of sync produced it.
 
 `python3 mirror.py report --source <repo>` prints your counts (the run above:
 149 mixed) — the choice is measured, never assumed.
@@ -217,6 +238,7 @@ Adopting this on an existing public repo doesn't cost its standing:
 | `additional_strip_paths` | — | Newline-separated paths/globs **added** to the list — withhold more without re-declaring the defaults |
 | `approved_paths` | — | Fail-closed consent roots: kept files outside them stop the sync; **required once the mirror is public** |
 | `history_mode` | `snapshot` | or `filter` |
+| `history_epoch` | `auto` | incremental whenever state allows; `"new"` DECLARES a full rebuild (force-push, said in the notice) |
 | `message_mode` | `scrub` | filter mode only: `map` / `redact` / `mechanical` / `scrub` / `subject` / `keep` |
 | `message_map` | — | `map`: repo-relative path to the `{sha: line}` JSON |
 | `redact_dict` | — | `redact`: repo-relative path to `dictgen` output |
