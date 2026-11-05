@@ -27,9 +27,11 @@ created **private**; you make it public when you choose — the Action never doe
 
 ## Why
 
-This Action serves a discipline where every deliberation is kept and
-publication is a granular choice: ship the code, declare the record, choose
-which records to publish. **Closed is still ahead of gone.**
+Small repositories can demonstrate this method by opening their entire
+record. This Action is the other discipline — **what you do when your
+deliberations are too expansive to open wholesale**: ship the code, declare
+the record, keep the reasoning — **a statement of custody, not an apology.**
+**Closed is still ahead of gone.**
 
 Shipping and disclosing are two decisions; this Action lets them keep separate
 clocks — open, digest, closed, **or not yet**. "Not yet" is a setting, not a
